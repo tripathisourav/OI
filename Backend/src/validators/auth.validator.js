@@ -1,5 +1,9 @@
 import { body, validationResult } from "express-validator";
 
+export function normalizeEmail(value) {
+    if (typeof value !== "string") return value;
+    return value.trim().toLowerCase(); 
+}
 
 export function validate(req, res, next) {
     const errors = validationResult(req);
@@ -18,6 +22,7 @@ export const registerValidator = [
 
     body("email")
         .trim()
+        .customSanitizer(normalizeEmail)
         .notEmpty().withMessage("Email is required")
         .isEmail().withMessage("Please provide a valid email"),
 
@@ -31,13 +36,13 @@ export const registerValidator = [
 export const loginValidator = [
     body("email")
         .trim()
+        .customSanitizer(normalizeEmail)
         .notEmpty().withMessage("Email is required")
         .isEmail().withMessage("Please provide a valid email"),
 
     body("password")
         .notEmpty().withMessage("Password is required")
         .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
-
 
     // Yes, adding .isLength({ min: 6 }) to the login validator is reasonable, but mostly for input validation consistency, not for performance.
 
@@ -48,7 +53,6 @@ export const loginValidator = [
     // Checking password length is extremely fast.
     // A single database query is not very expensive in most applications.
     // Most login attempts are from legitimate users entering passwords of normal length.
-
 
     // Security Consideration
 

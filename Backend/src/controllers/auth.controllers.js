@@ -1,6 +1,7 @@
 import userModel from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../services/mail.service.js";
+import { normalizeEmail } from "../validators/auth.validator.js";
 
 
 /** 
@@ -29,7 +30,8 @@ import { sendEmail } from "../services/mail.service.js";
  */
 export async function register(req, res) {
 
-    const { username, email, password } = req.body;
+    const { username, password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     const isUserAlreadyExists = await userModel.findOne({
         $or: [{ email }, { username }]
@@ -50,15 +52,18 @@ export async function register(req, res) {
         process.env.JWT_SECRET,
     );
 
+    const token = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+    );
 
-    // const token = jwt.sign(
-    //     {
-    //         userId: user._id
-    //     },
-    //     process.env.JWT_SECRET
-    // )
-
-    // res.cookie('token', token);
+    res.cookie("token", token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    });
 
     await sendEmail({
         to: email,
@@ -78,10 +83,12 @@ export async function register(req, res) {
     res.status(201).json({
         message: "User registered successfully",
         success: true,
+        token,
         user: {
             id: user._id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            verified: user.verified
         }
     });
 
@@ -95,7 +102,8 @@ export async function register(req, res) {
  */
 export async function login(req, res) {
 
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     const user = await userModel.findOne({ email });
 
@@ -131,15 +139,22 @@ export async function login(req, res) {
         { expiresIn: "7d" }
     );
 
-    res.cookie("token", token)
+    res.cookie("token", token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    });
 
     res.status(200).json({
         message: "Login successful",
         success: true,
+        token,
         user: {
             id: user._id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            verified: user.verified
         }
     })
 }
