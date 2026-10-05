@@ -1,155 +1,263 @@
-const userModel = require("../models/user.model")
-const bcrypt = require("bcryptjs")
-const jwt = require("jsonwebtoken")
-const tokenBlacklistModel = require("../models/blacklist.model")
+import userModel from "../models/user.model.js";
+import jwt from "jsonwebtoken";
+import { sendEmail } from "../services/mail.service.js";
+import { normalizeEmail } from "../validators/auth.validator.js";
 
-/**
- * @name registerUserController
- * @description register a new user, expects username, email and password in the request body
- * @access Public
+
+/** 
+ * The register function is an asynchronous function that handles the registration of a new user. It takes in the request and response objects as parameters. 
+ * It first extracts the username, email, and password from the request body. Then it checks if a user with the same email or username already exists in the database. 
+ * If such a user exists, it returns a 400 status code with an error message. If not, it creates a new user in the database with the provided information.
+ * After creating the user, it generates a JWT token for email verification and sends a verification email to the user's email address. Finally, it returns a 201 status code with a success message and the user's information (excluding the password).
+ * The login function is an asynchronous function that handles the login process for a user. It takes in the request and response objects as parameters.
+ * It first extracts the email and password from the request body. Then it checks if a user with the provided email exists in the database. If such a user does not exist, it returns a 400 status code with an error message.
+ * If the user exists, it compares the provided password with the hashed password stored in the database using the comparePassword method defined in the user model. If the passwords do not match, it returns a 400 status code with an error message.
+ * If the user's email is not verified, it returns a 400 status code with an error message indicating that the email needs to be verified before logging in. If all checks pass, it generates a JWT token for authentication and returns a 200 status code with a success message and the token.
+ * The verifyEmail function is an asynchronous function that handles the email verification process for a user. It takes in the request and response objects as parameters.
+ * It first extracts the token from the query parameters of the request. If the token is missing, it returns a 400 status code with an error message. If the token is present, it verifies the token using the JWT secret key.
+ * If the token is valid, it extracts the email from the decoded token and checks if a user with that email exists in the database. If such a user does not exist, it returns a 400 status code with an error message.
+ * If the user exists but is already verified, it returns a 400 status code with an error message indicating that the email is already verified. If the user exists and is not verified, it sets the verified field to true and saves the user document in the database.
+ * Finally, it sends an HTML response to the user confirming that their email has been successfully verified.
  */
-async function registerUserController(req, res) {
 
-    const { username, email, password } = req.body
 
-    if (!username || !email || !password) {
-        return res.status(400).json({
-            message: "Please provide username, email and password"
-        })
-    }
+
+/** 
+ * Register a new user
+ * @param {Object} req - The request object
+ * @param {Object} res - The response object
+ * @returns {Object} - The response object
+ */
+export async function register(req, res) {
+
+    const { username, password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
     const isUserAlreadyExists = await userModel.findOne({
-        $or: [ { username }, { email } ]
+        $or: [{ email }, { username }]
     })
 
     if (isUserAlreadyExists) {
         return res.status(400).json({
-            message: "Account already exists with this email address or username"
+            message: "User with this email or username already exists",
+            success: false,
+            err: "User already exists"
         })
     }
 
-    const hash = await bcrypt.hash(password, 10)
+    const user = await userModel.create({ username, email, password }) // password saved without encryption because in userModel we have pre function which will do all the hashing and stuff
 
-    const user = await userModel.create({
-        username,
-        email,
-        password: hash
-    })
-
-    const token = jwt.sign(
-        { id: user._id, username: user.username },
+    const emailVerificationToken = jwt.sign(
+        { email: user.email, purpose: "email-verification" },
         process.env.JWT_SECRET,
-        { expiresIn: "1d" }
-    )
+        {
+            expiresIn: "24h"
+        }
+    );
 
-    res.cookie("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 24 * 60 * 60 * 1000
-    })
-
+    await sendEmail({
+        to: email,
+        subject: "Welcome to Perplexity!",
+        html: `
+        <p>Hi ${username},</p>
+        <p>Thank you for registering at <strong>Oi</strong>. We're excited to have you on board!</p>
+        <p>To get started, please verify your email address by clicking the link below:</p>
+        <a href="http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}">
+            Verify Email
+        </a>
+        <p>If you did not create an account, please ignore this email.</p>
+        <p>Best regards,<br>The Oi Team</p>
+    `
+    }); // email sent contatining token made of user email jb user link pr click krega toh /api/auth/verify-email 
+    // pr request pahuch jayegi token ke saath, agar email user ka nhi hoga toh woh link ko click nhi kr payega or 
+    // verified nhi ho payega iss tarike se hme saare users verified milenga
 
     res.status(201).json({
         message: "User registered successfully",
+        success: true,
         user: {
             id: user._id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            verified: user.verified
         }
-    })
+    });
 
 }
 
-
-/**
- * @name loginUserController
- * @description login a user, expects email and password in the request body
- * @access Public
+/** 
+ * Login a user and return JWT token
+ * @param {Object} req - The request object
+ * @param {Object} res - The response object
+ * @returns {Object} - The response object
  */
-async function loginUserController(req, res) {
+export async function login(req, res) {
 
-    const { email, password } = req.body
+    const { password } = req.body;
+    const email = normalizeEmail(req.body.email);
 
-    const user = await userModel.findOne({ email })
+    const user = await userModel.findOne({ email });
 
     if (!user) {
         return res.status(400).json({
-            message: "Invalid email or password"
+            message: "User with this email does not exist",
+            success: false,
+            err: "User not found"
         })
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    const isPasswordMatch = await user.comparePassword(password);
 
-    if (!isPasswordValid) {
+    if (!isPasswordMatch) {
         return res.status(400).json({
-            message: "Invalid email or password"
+            message: "Incorrect password",
+            success: false,
+            err: "Incorrect password"
+        })
+    }
+
+    if (!user.verified) {
+        return res.status(400).json({
+            message: "Email not verified. Please verify your email before logging in.",
+            success: false,
+            err: "Email not verified"
         })
     }
 
     const token = jwt.sign(
-        { id: user._id, username: user.username },
+        { userId: user._id },
         process.env.JWT_SECRET,
-        { expiresIn: "1d" }
-    )
+        { expiresIn: "7d" }
+    );
 
     res.cookie("token", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 24 * 60 * 60 * 1000
-    })
+        sameSite: "lax",
+        secure: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
     res.status(200).json({
-        message: "User loggedIn successfully.",
+        message: "Login successful",
+        success: true,
+        token,
         user: {
             id: user._id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            verified: user.verified
         }
     })
 }
 
 
-/**
- * @name logoutUserController
- * @description clear token from user cookie and add the token in blacklist
- * @access public
+/** 
+ * Verify user's email address
+ * @param {Object} req - The request object
+ * @param {Object} res - The response object
+ * @returns {Object} - The response object
  */
-async function logoutUserController(req, res) {
-    const token = req.cookies.token
+export async function verifyEmail(req, res) {
 
-    if (token) {
-        await tokenBlacklistModel.create({ token })
+    const { token: verificationToken } = req.query;
+
+    if (!verificationToken) {
+        return res.status(400).json({
+            message: "Verification token is missing",
+            success: false,
+            err: "Token missing"
+        });
     }
 
-    res.clearCookie("token", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
-    })
+    try {
+        const decoded = jwt.verify(
+            verificationToken,
+            process.env.JWT_SECRET
+        );
 
-    res.status(200).json({
-        message: "User logged out successfully"
-    })
+        if (decoded.purpose !== "email-verification") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid verification token"
+            });
+        }
+
+        const email = decoded.email;
+
+        const user = await userModel.findOne({ email });
+
+        if (!user) {
+            return res.status(400).json({
+                message: "Invalid token",
+                success: false,
+                err: "User not found"
+            });
+        }
+
+        if (user.verified) {
+            return res.status(400).json({
+                message: "Email already verified",
+                success: false,
+                err: "Email already verified"
+            });
+        }
+
+        // Verify user
+        user.verified = true;
+        await user.save();
+
+        // Create authentication token
+        const authToken = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        res.cookie("token", authToken, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: false,
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        return res.redirect(
+            "http://localhost:5173/verify-email-success"
+        );
+
+    } catch (error) {
+        console.error("Error verifying email:", error);
+
+        return res.status(400).json({
+            message: "Invalid or expired token",
+            success: false,
+            err: error.message
+        });
+    }
 }
 
-/**
- * @name getMeController
- * @description get the current logged in user details.
- * @access private
- */
-async function getMeController(req, res) {
 
-    const user = await userModel.findById(req.user.id)
+export async function getMe(req, res) {
 
+    const userId = req.user.userId;
 
+    const user = await userModel.findById(userId).select("-password"); // password ko exclude kr diya select se taki password wapas na jaye response me
+
+    if (!user) {
+        return res.status(400).json({
+            message: "User not found",
+            success: false,
+            err: "User not found"
+        })
+    }
 
     res.status(200).json({
-        message: "User details fetched successfully",
+        message: "User fetched successfully",
+        success: true,
         user: {
             id: user._id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            verified: user.verified
         }
     })
 
@@ -157,9 +265,59 @@ async function getMeController(req, res) {
 
 
 
-module.exports = {
-    registerUserController,
-    loginUserController,
-    logoutUserController,
-    getMeController
+export async function resend(req, res) {
+    const { email } = req.body;
+
+    const user = await userModel.findOne({ email });
+
+    if (!user) {
+        return res.status(400).json({
+            message: "user not found",
+            success: false,
+            err: 'User not found'
+        })
+    }
+
+    if (user.verified) {
+        return res.status(400).json({
+            message: "user already verified",
+            success: false,
+            err: 'User is verified already'
+        })
+    }
+
+
+    const emailVerificationToken = jwt.sign(
+        {
+            email: user.email,
+            purpose: "email-verification"
+        },
+        process.env.JWT_SECRET,
+        {
+            expiresIn: "24h"
+        }
+    );
+
+    await sendEmail({
+        to: user.email,
+        subject: "Welcome to Oi!",
+        html: `
+                <p>Hi ${user.username},</p>
+                <p>Thank you for registering at <strong>Oi</strong>. We're excited to have you on board!</p>
+                <p>To get started, please verify your email address by clicking the link below:</p>
+                <a href="http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}">Verify Email</a>
+                <p>If you did not create an account, please ignore this email.</p>
+                <p>Best regards,<br>The Oi Team</p>
+        `
+    })
+
+    res.status(201).json({
+        message: "Email resent successfully",
+        success: true,
+        user: {
+            id: user._id,
+            username: user.username,
+            email: user.email
+        }
+    });
 }
