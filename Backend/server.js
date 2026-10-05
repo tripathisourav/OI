@@ -1,16 +1,27 @@
-require('dotenv').config();
-const app = require('./src/app');
+import "dotenv/config.js"
+import app from "./src/app.js"
+import connectToDB from "./src/config/database.js"
+import http from "http"
+import { initSocket } from "./src/sockets/server.socket.js"
 
-const connectDB = require('./src/config/database');
-// const invokeGemini = require('./src/services/ai.service')
+const PORT = process.env.PORT || 8000
 
 
 
-connectDB();
-// invokeGemini()
+const httpServer = http.createServer(app);
+initSocket(httpServer);
 
-const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+
+
+connectToDB()
+        .catch((error) => {
+            console.error("Failed to connect to the database:", error)
+            process.exit(1) // Exit the process with a failure code
+        })
+
+        
+
+httpServer.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`)
+})
