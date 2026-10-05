@@ -2,185 +2,150 @@ import React, { useState } from 'react'
 import { Link, useNavigate, Navigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useSelector } from 'react-redux'
-import ScanPanel from '../../../components/brand/ScanPanel'
-import BulldogLogo from '../../../components/brand/BulldogLogo'
-import { IconMail, IconLock, IconEye, IconEyeOff, IconAlert, IconArrowRight } from '../../../components/icons'
 
+const IconBulldog = ({ className }) => (
+    <svg viewBox="0 0 120 120" className={className} xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#4B5563" />
+                <stop offset="100%" stopColor="#1F2937" />
+            </linearGradient>
+        </defs>
+        <path d="M20 85 L25 75 L30 85 L35 75 L40 85 L45 75 L50 85 L55 75 L60 85 L65 75 L70 85 L75 75 L80 85 L85 75 L90 85 L95 75 L100 85" fill="#374151" stroke="#6B7280" strokeWidth="2" />
+        <path d="M25 80 C25 50 30 20 60 20 C90 20 95 50 95 80 C95 95 85 105 60 105 C35 105 25 95 25 80Z" fill="url(#lg)" stroke="#6B7280" strokeWidth="2" />
+        <circle cx="42" cy="55" r="10" fill="#111827" stroke="#4B5563" strokeWidth="2" />
+        <circle cx="42" cy="55" r="5" fill="#06B6D4" />
+        <circle cx="44" cy="53" r="2" fill="white" opacity="0.8" />
+        <path d="M68 50 Q78 55 88 50" fill="none" stroke="#111827" strokeWidth="3" strokeLinecap="round" />
+        <ellipse cx="60" cy="72" rx="12" ry="8" fill="#111827" stroke="#4B5563" strokeWidth="2" />
+        <path d="M45 85 Q60 92 75 85" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+);
 
+const FloatingParticles = () => {
+    const particles = Array.from({ length: 15 }, (_, i) => ({
+        id: i,
+        size: Math.random() * 3 + 1,
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        duration: Math.random() * 20 + 15,
+        delay: Math.random() * 10,
+        opacity: Math.random() * 0.1 + 0.03,
+    }));
+    return (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+            {particles.map((p) => (
+                <div key={p.id} className="absolute rounded-full bg-cyan-400 animate-float"
+                    style={{
+                        width: p.size, height: p.size,
+                        left: `${p.left}%`, top: `${p.top}%`,
+                        opacity: p.opacity,
+                        animationDuration: `${p.duration}s`,
+                        animationDelay: `${p.delay}s`,
+                        filter: 'blur(1px)',
+                    }} />
+            ))}
+        </div>
+    );
+};
 
 const Login = () => {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
-    const [showPassword, setShowPassword] = useState(false)
-
-
     const user = useSelector(state => state.auth.user)
     const loading = useSelector(state => state.auth.loading)
     const error = useSelector(state => state.auth.error)
-
-
     const { handleLogin } = useAuth()
-
     const navigate = useNavigate()
 
     const submitForm = async (e) => {
         e.preventDefault()
-
-        const payload = {
-            email,
-            password,
-        }
-
-        const result = await handleLogin(payload)
-
-        if (result?.success) {
-            navigate("/")
-        }
-
+        const result = await handleLogin({ email, password })
+        if (result?.success) navigate("/")
     }
 
-    if (!loading && user) {
-        return <Navigate to="/" replace />
-        // agar maine login kr liya toh peeche ka page login ho jayega toh back jaane pe login khul jayega kyoki woh history mein save rahega lekin agar replace hoga toh history delete ho jayega 
-    }
+    if (!loading && user) return <Navigate to="/" replace />
 
     return (
-        <section className="min-h-screen w-full bg-[#08090B] text-zinc-100 lg:grid lg:grid-cols-2">
-            <style>{`
-                @keyframes float {
-                    0%, 100% { transform: translateY(0) translateX(0); }
-                    25% { transform: translateY(-20px) translateX(10px); }
-                    50% { transform: translateY(-10px) translateX(-10px); }
-                    75% { transform: translateY(-30px) translateX(5px); }
-                }
-                @keyframes ping-slow {
-                    0% { transform: scale(1); opacity: 0.3; }
-                    50% { opacity: 0.1; }
-                    100% { transform: scale(1.5); opacity: 0; }
-                }
-                @keyframes ping-slow-delayed {
-                    0% { transform: scale(1); opacity: 0.2; }
-                    50% { opacity: 0.05; }
-                    100% { transform: scale(1.3); opacity: 0; }
-                }
-                @keyframes eye-scan {
-                    0%, 100% { transform: translateX(0); }
-                    25% { transform: translateX(-3px); }
-                    75% { transform: translateX(3px); }
-                }
-                @keyframes scan-sweep {
-                    0% { transform: translateY(-100%); opacity: 0; }
-                    10% { opacity: 1; }
-                    90% { opacity: 1; }
-                    100% { transform: translateY(700%); opacity: 0; }
-                }
-                .animate-float { animation: float linear infinite; }
-                .animate-ping-slow { animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
-                .animate-ping-slow-delayed { animation: ping-slow-delayed 2s cubic-bezier(0, 0, 0.2, 1) infinite 0.5s; }
-                .animate-eye-scan { animation: eye-scan 2s ease-in-out infinite; }
-                .animate-scan-sweep { animation: scan-sweep 6s linear infinite; }
-                @media (prefers-reduced-motion: reduce) {
-                    .animate-float, .animate-ping-slow, .animate-ping-slow-delayed,
-                    .animate-eye-scan, .animate-scan-sweep, .animate-pulse { animation: none !important; }
-                }
-            `}</style>
+        <section className="min-h-screen bg-void relative overflow-hidden flex items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+            {/* Background Effects */}
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[120px] animate-aurora" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[100px] animate-aurora" style={{ animationDelay: '-7s' }} />
+            <div className="absolute inset-0 noise-bg" />
+            <FloatingParticles />
 
-            <ScanPanel
-                eyebrow="Secure channel"
-                title="Welcome back to the watch."
-                highlight="watch."
-                subtitle="Oi keeps digging while you're away. Sign in to pick up the thread — every lead, every file, right where you left it."
-                tags={['Live monitoring', 'Zero spin', 'Receipts kept']}
-            />
-
-            <div className="relative flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
-                <div className="pointer-events-none absolute -right-32 top-1/3 h-72 w-72 rounded-full bg-blue-600/10 blur-3xl" />
-
-                <div className="relative mx-auto w-full max-w-sm">
-                    <div className="mb-10 flex items-center gap-3 lg:hidden">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-700 bg-linear-to-br from-gray-800 to-gray-900">
-                            <BulldogLogo className="h-7 w-7" />
+            <div className="relative z-10 w-full max-w-md">
+                <div className="bg-surface/60 backdrop-blur-2xl rounded-3xl border border-white/[0.06] shadow-2xl shadow-black/50 p-8 sm:p-10">
+                    {/* Logo */}
+                    <div className="flex flex-col items-center mb-8">
+                        <div className="relative mb-4">
+                            <div className="absolute inset-0 bg-cyan-500/20 rounded-2xl blur-lg" />
+                            <div className="relative w-14 h-14 rounded-2xl bg-linear-to-br from-gray-800 to-gray-900 border border-gray-700 flex items-center justify-center shadow-xl">
+                                <IconBulldog className="w-10 h-10" />
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-lg font-bold tracking-tight text-white">Oi</p>
-                            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-600">Watch Terminal</p>
-                        </div>
+                        <h1 className="text-3xl font-bold tracking-tight">
+                            <span className="bg-linear-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">Welcome back</span>
+                        </h1>
+                        <p className="mt-2 text-sm text-gray-500">Sign in to continue to Oi</p>
                     </div>
 
-                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.3em] text-cyan-400/80">Sign in</p>
-                    <h1 className="text-3xl font-bold tracking-tight text-white">
-                        Good to see you.
-                    </h1>
-                    <p className="mt-2 text-sm text-zinc-400">
-                        Enter your details to get back on the case.
-                    </p>
-
-                    {error && (
-                        <div className="mt-6 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                            <IconAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    <form onSubmit={submitForm} className="mt-8 space-y-5">
-                        <div>
-                            <label htmlFor="email" className="mb-2 block text-sm font-medium text-zinc-300">
+                    <form onSubmit={submitForm} className="space-y-5">
+                        {error && (
+                            <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                {error}
+                            </p>
+                        )}
+                        <div className="group">
+                            <label htmlFor="email" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
                                 Email
                             </label>
-                            <div className="relative">
-                                <IconMail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-                                <input
-                                    id="email"
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="you@example.com"
-                                    required
-                                    className="w-full rounded-xl border border-white/10 bg-[#111827]/70 py-3 pl-10 pr-4 text-zinc-100 outline-none backdrop-blur transition placeholder:text-zinc-600 focus:border-cyan-400/50 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.15)]"
-                                />
-                            </div>
+                            <input
+                                id="email"
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="you@example.com"
+                                required
+                                className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3.5 text-sm text-gray-100 placeholder:text-gray-600 outline-none transition-all duration-200 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 focus:bg-black/40"
+                            />
                         </div>
 
-                        <div>
-                            <label htmlFor="password" className="mb-2 block text-sm font-medium text-zinc-300">
+                        <div className="group">
+                            <label htmlFor="password" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
                                 Password
                             </label>
-                            <div className="relative">
-                                <IconLock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-                                <input
-                                    id="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Enter your password"
-                                    required
-                                    className="w-full rounded-xl border border-white/10 bg-[#111827]/70 py-3 pl-10 pr-11 text-zinc-100 outline-none backdrop-blur transition placeholder:text-zinc-600 focus:border-cyan-400/50 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.15)]"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword((v) => !v)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 transition hover:text-gray-300"
-                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                >
-                                    {showPassword ? <IconEyeOff className="h-4 w-4" /> : <IconEye className="h-4 w-4" />}
-                                </button>
-                            </div>
+                            <input
+                                id="password"
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                required
+                                className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3.5 text-sm text-gray-100 placeholder:text-gray-600 outline-none transition-all duration-200 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 focus:bg-black/40"
+                            />
                         </div>
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 px-4 py-3 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:from-blue-500 hover:to-cyan-500 hover:shadow-blue-500/40 focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(34,211,238,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full relative overflow-hidden rounded-xl bg-linear-to-r from-cyan-500 to-blue-600 px-4 py-3.5 text-sm font-bold text-black shadow-lg shadow-cyan-500/20 transition-all duration-200 hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Signing in…' : 'Sign in'}
-                            {!loading && <IconArrowRight className="h-4 w-4" />}
+                            <span className="relative z-10">{loading ? 'Signing in...' : 'Sign In'}</span>
                         </button>
                     </form>
 
-                    <p className="mt-8 text-center text-sm text-zinc-400">
+                    <div className="mt-8 flex items-center gap-4">
+                        <div className="h-px flex-1 bg-white/10" />
+                        <span className="text-xs text-gray-600 font-medium uppercase tracking-wider">or</span>
+                        <div className="h-px flex-1 bg-white/10" />
+                    </div>
+
+                    <p className="mt-8 text-center text-sm text-gray-500">
                         Don&apos;t have an account?{' '}
-                        <Link to="/register" className="font-semibold text-cyan-400 transition hover:text-cyan-300">
-                            Register
+                        <Link to="/register" className="font-semibold text-cyan-400 hover:text-cyan-300 transition-colors relative group">
+                            Create one
+                            <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-cyan-400 transition-all group-hover:w-full" />
                         </Link>
                     </p>
                 </div>

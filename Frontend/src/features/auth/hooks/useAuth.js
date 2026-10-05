@@ -7,17 +7,21 @@ import { setUser, setLoading, setError } from "../auth.slice";
 export function useAuth() {
 
     const dispatch = useDispatch()
+    const getErrorMessage = (error, fallback) =>
+        error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || fallback
 
     async function handleRegister({ email, username, password }) {
         try {
             dispatch(setLoading(true))
+            dispatch(setError(null))
             const data = await register({ email, username, password })
-            if (data?.user) {
-                dispatch(setUser(data.user))
-            }
+            dispatch(setError(null))
+            // if (data?.user) {
+            //     dispatch(setUser(data.user))
+            // }
             return data
         } catch (error) {
-            dispatch(setError(error.response?.data?.message || "Registeration failed"))
+            dispatch(setError(getErrorMessage(error, "Registration failed. Please try again.")))
             return null
         } finally {
             dispatch(setLoading(false))
@@ -28,11 +32,13 @@ export function useAuth() {
     async function handleLogin({ email, password }) {
         try {
             dispatch(setLoading(true))
+            dispatch(setError(null))
             const data = await login({ email, password })
             dispatch(setUser(data.user))
+            dispatch(setError(null))
             return data
         } catch (error) {
-            dispatch(setError(error.response?.data?.message || "Login failed"))
+            dispatch(setError(getErrorMessage(error, "Login failed. Please try again.")))
             return null
         } finally {
             dispatch(setLoading(false))
@@ -45,9 +51,12 @@ export function useAuth() {
             dispatch(setLoading(true))
             const data = await getMe()
             dispatch(setUser(data.user))
+            dispatch(setError(null))
             return data
         } catch (error) {
-            dispatch(setError(error.response?.data?.message || "Failed to fetch user data"))
+            if (error.response?.status !== 401) {
+                dispatch(setError(getErrorMessage(error, "Failed to fetch user data")))
+            }
             return null
         } finally {
             dispatch(setLoading(false))

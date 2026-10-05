@@ -48,42 +48,33 @@ export async function register(req, res) {
     const user = await userModel.create({ username, email, password }) // password saved without encryption because in userModel we have pre function which will do all the hashing and stuff
 
     const emailVerificationToken = jwt.sign(
-        { email: user.email },
+        { email: user.email, purpose: "email-verification" },
         process.env.JWT_SECRET,
+        {
+            expiresIn: "24h"
+        }
     );
-
-    const token = jwt.sign(
-        { userId: user._id },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-    );
-
-    res.cookie("token", token, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: false,
-        maxAge: 7 * 24 * 60 * 60 * 1000
-    });
 
     await sendEmail({
         to: email,
         subject: "Welcome to Perplexity!",
         html: `
-                <p>Hi ${username},</p>
-                <p>Thank you for registering at <strong>Oi</strong>. We're excited to have you on board!</p>
-                <p>To get started, please verify your email address by clicking the link below:</p>
-                <a href="http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}">Verify Email</a>
-                <p>If you did not create an account, please ignore this email.</p>
-                <p>Best regards,<br>The Oi Team</p>
-        `
-    }) // email sent contatining token made of user email jb user link pr click krega toh /api/auth/verify-email 
+        <p>Hi ${username},</p>
+        <p>Thank you for registering at <strong>Oi</strong>. We're excited to have you on board!</p>
+        <p>To get started, please verify your email address by clicking the link below:</p>
+        <a href="http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}">
+            Verify Email
+        </a>
+        <p>If you did not create an account, please ignore this email.</p>
+        <p>Best regards,<br>The Oi Team</p>
+    `
+    }); // email sent contatining token made of user email jb user link pr click krega toh /api/auth/verify-email 
     // pr request pahuch jayegi token ke saath, agar email user ka nhi hoga toh woh link ko click nhi kr payega or 
     // verified nhi ho payega iss tarike se hme saare users verified milenga
 
     res.status(201).json({
         message: "User registered successfully",
         success: true,
-        token,
         user: {
             id: user._id,
             username: user.username,
@@ -168,19 +159,31 @@ export async function login(req, res) {
  */
 export async function verifyEmail(req, res) {
 
-    const { token } = req.query; // token ko nikalenga phir usse data extract krega check krega iss email se koi 
-    // user hai ya nhi agar user available hoga toh user.verified ko true set kr denga phir user ke data ko save kr denga 
-    if (!token) {
+    const { token: verificationToken } = req.query;
+
+    if (!verificationToken) {
         return res.status(400).json({
             message: "Verification token is missing",
             success: false,
             err: "Token missing"
-        })
+        });
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(
+            verificationToken,
+            process.env.JWT_SECRET
+        );
+
+        if (decoded.purpose !== "email-verification") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid verification token"
+            });
+        }
+
         const email = decoded.email;
+
         const user = await userModel.findOne({ email });
 
         if (!user) {
@@ -188,7 +191,7 @@ export async function verifyEmail(req, res) {
                 message: "Invalid token",
                 success: false,
                 err: "User not found"
-            })
+            });
         }
 
         if (user.verified) {
@@ -196,29 +199,40 @@ export async function verifyEmail(req, res) {
                 message: "Email already verified",
                 success: false,
                 err: "Email already verified"
-            })
+            });
         }
 
+        // Verify user
         user.verified = true;
         await user.save();
 
-        const html = `
-            <p>Hi ${user.username},</p>
-            <p>Your email has been successfully verified! You can now log in to your account and start using Oi.</p>
-            <p>Best regards,<br>The Oi Team</p>
-        `;
+        // Create authentication token
+        const authToken = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
 
-        res.send(html);
+        res.cookie("token", authToken, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: false,
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        return res.redirect(
+            "http://localhost:5173/verify-email-success"
+        );
 
     } catch (error) {
         console.error("Error verifying email:", error);
-        res.status(400).json({
+
+        return res.status(400).json({
             message: "Invalid or expired token",
             success: false,
-            err: "Invalid token"
-        })
+            err: error.message
+        });
     }
-
 }
 
 
@@ -254,7 +268,7 @@ export async function getMe(req, res) {
 export async function resend(req, res) {
     const { email } = req.body;
 
-    const user = await userModel.findOne({email});
+    const user = await userModel.findOne({ email });
 
     if (!user) {
         return res.status(400).json({
@@ -274,8 +288,14 @@ export async function resend(req, res) {
 
 
     const emailVerificationToken = jwt.sign(
-        { email: user.email },
+        {
+            email: user.email,
+            purpose: "email-verification"
+        },
         process.env.JWT_SECRET,
+        {
+            expiresIn: "24h"
+        }
     );
 
     await sendEmail({

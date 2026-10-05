@@ -15,7 +15,7 @@ const geminiModel = new ChatGoogleGenerativeAI({
 // gemini bda model hai uske title generate jaise chote se kaam mein bhi badi cost aayegi mistral yha better rhega 
 const mistralModel = new ChatMistralAI({
     model: "mistral-small-latest",
-    apiKey: process.env.MISRAL_API_KEY
+    apiKey: process.env.MISTRAL_API_KEY
 });
 
 
@@ -105,7 +105,7 @@ export async function generateResponse(messages) {
 
 
 export async function generateChatTittle(message) {
-    const res = await mistralModel.invoke([
+    const res = await geminiModel.invoke([
         new SystemMessage(` 
             You are a helpful assistant that generates concise and descriptive titles for chat conversations.   
            
